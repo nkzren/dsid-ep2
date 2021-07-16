@@ -7,6 +7,8 @@ release.properties
 
 aggregation-functions/target/
 
+dsid-ep2-spark/
+
 # Eclipse
 .project
 .classpath
