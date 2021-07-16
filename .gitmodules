@@ -2,3 +2,6 @@
 	path = dsid-ep2-spark
 	url = git@github.com:nkzren/dsid-ep2-spark.git
     ignore = dirty
+[submodule "frontend"]
+	path = frontend
+	url = git@github.com:nkzren/dsid-frontend.git
