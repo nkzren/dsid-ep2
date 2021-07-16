@@ -20,8 +20,12 @@ public class WordCounter {
                 .appName("JavaWordCount")
                 .getOrCreate();
 
+        spark.log().info("Starting spark app...");
+
+        spark.log().info("Reading text file");
         JavaRDD<String> lines = spark.read().textFile("file:///tmp/shrek.txt").javaRDD();
 
+        spark.log().info("File read successfully. Starting word counting");
         JavaRDD<String> words = lines.flatMap(s -> Arrays.asList(SPACE.split(s)).iterator());
 
         JavaPairRDD<String, Integer> ones = words.mapToPair(s -> new Tuple2<>(s, 1));
