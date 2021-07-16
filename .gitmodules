@@ -1,3 +1,3 @@
 [submodule "dsid-ep2-spark"]
 	path = dsid-ep2-spark
-	url = git@github.com:nkzren/dsid-ep2-spark.git 
+	url = https://github.com/nkzren/dsid-ep2.git 
