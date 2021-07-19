@@ -16,7 +16,7 @@ public class AverageAggregator {
 
         SparkSession spark = SparkSession
                 .builder()
-                .appName("JavaWordCount")
+                .appName("AverageAggregator")
                 .getOrCreate();
 
         Configuration config = spark.sparkContext().hadoopConfiguration();
