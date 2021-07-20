@@ -1,10 +1,13 @@
 package org.cansados.aggregations;
 
+import com.mongodb.spark.MongoSpark;
+import org.apache.commons.text.StringSubstitutor;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.bson.Document;
 import scala.Tuple2;
 
 import java.time.LocalDate;
@@ -19,12 +22,15 @@ public class AverageAggregator {
         SparkSession spark = SparkSession
                 .builder()
                 .appName("AverageAggregator")
+                .config("spark.mongodb.output.uri", argList.remove(0) + "dsid.averages?authSource=admin")
                 .getOrCreate();
 
-        Configuration config = spark.sparkContext().hadoopConfiguration();
-        config.set("fs.s3a.access.key", argList.remove(0));
-        config.set("fs.s3a.secret.key", argList.remove(0));
-        config.set("fs.s3a.endpoint", "s3.amazonaws.com");
+        Configuration hadoopConfig = spark.sparkContext().hadoopConfiguration();
+        hadoopConfig.set("fs.s3a.access.key", argList.remove(0));
+        hadoopConfig.set("fs.s3a.secret.key", argList.remove(0));
+        hadoopConfig.set("fs.s3a.endpoint", "s3.amazonaws.com");
+
+        String inventoryId = argList.remove(0);
 
         spark.log().info("Starting spark app...");
 
@@ -45,7 +51,7 @@ public class AverageAggregator {
             return LocalDate.parse(dateString, DateTimeFormatter.ofPattern("yyyy-MM-dd")).getYear();
         });
 
-        List<Tuple2<Integer, Double>> meanTempByYear = byYear.aggregateByKey(new Tuple2<>(0, 0.0),
+        JavaPairRDD<Integer, Double> meanTempByYear = byYear.aggregateByKey(new Tuple2<>(0, 0.0),
                 (tuple, rows) -> {
                     AtomicReference<Integer> count = new AtomicReference<>(0);
                     AtomicReference<Double> sum = new AtomicReference<>(0.0);
@@ -57,9 +63,21 @@ public class AverageAggregator {
                     return new Tuple2<>(count.get(), sum.get());
                 },
                 (v1, v2) -> new Tuple2<>(v1._1 + v2._1, v1._2 + v2._2)
-        ).mapValues(sum -> { return (1.0 * sum._2 / sum._1); }).collect();
+        ).mapValues(sum -> { return (1.0 * sum._2 / sum._1); });
 
-        meanTempByYear.forEach(tuple -> spark.log().info("Year: "+ tuple._1 + " | Mean temperature: " + tuple._2));
+        // Map results to
+        JavaRDD<Document> documents = meanTempByYear.map(tuple -> {
+            Map<String, String> valuesMap = Map.of(
+                    "inventoryId", inventoryId,
+                    "year", tuple._1.toString(),
+                    "avg", tuple._2.toString()
+            );
+            StringSubstitutor substitutor = new StringSubstitutor(valuesMap);
+            String templateString = "{ inventoryId: '${inventoryId}', year: '${year}', avg: '${avg}' }";
+            return Document.parse(substitutor.replace(templateString));
+        });
+
+        MongoSpark.save(documents);
 
     }
 }
