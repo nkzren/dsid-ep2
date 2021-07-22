@@ -2,7 +2,6 @@ package org.cansados.aggregations;
 
 import com.mongodb.spark.MongoSpark;
 import org.apache.commons.text.StringSubstitutor;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Row;
@@ -19,13 +18,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class AverageAggregatorByMonth {
+public class StdevAggregatorByYear {
     public static void main(String[] args) {
         List<String> argList = new ArrayList<>(Arrays.asList(args));
 
         SparkSession session = Util.setupSparkSession(
                 argList,
-                "AverageAggregatorByMonth",
+                "AverageAggregatorByYear",
                 "averages"
         );
 
@@ -43,14 +42,13 @@ public class AverageAggregatorByMonth {
                     .load(argList.stream().filter(it -> it.startsWith("s3a")).toArray(String[]::new))
                     .toJavaRDD();
 
-            // Group by month
-            JavaPairRDD<String, Iterable<Row>> byMonth = lines.groupBy(row -> {
-                String month = row.getAs("Month");
-                String year = row.getAs("Year");
-                return year + "/" + month;
+            // Group by year
+            JavaPairRDD<Integer, Iterable<Row>> byYear = lines.groupBy(row -> {
+                String dateString = row.getAs("Date");
+                return LocalDate.parse(dateString, DateTimeFormatter.ofPattern("yyyy-MM-dd")).getYear();
             });
 
-            JavaPairRDD<String, Double> meanTempByMonth = byMonth.aggregateByKey(new Tuple2<>(0, 0.0),
+            JavaPairRDD<Integer, Double> meanTempByYear = byYear.aggregateByKey(new Tuple2<>(0, 0.0),
                     (tuple, rows) -> {
                         AtomicReference<Integer> count = new AtomicReference<>(0);
                         AtomicReference<Double> sum = new AtomicReference<>(0.0);
@@ -65,15 +63,15 @@ public class AverageAggregatorByMonth {
             ).mapValues(sum -> (1.0 * sum._2 / sum._1));
 
             // Map results to
-            JavaRDD<Document> documents = meanTempByMonth.map(tuple -> {
+            JavaRDD<Document> documents = meanTempByYear.map(tuple -> {
                 Map<String, String> valuesMap = Map.of(
                         "inventoryId", inventoryId,
-                        "groupedBy", "month",
-                        "label", tuple._1,
+                        "groupedBy", "year",
+                        "label", tuple._1.toString(),
                         "avg", tuple._2.toString()
                 );
                 StringSubstitutor substitutor = new StringSubstitutor(valuesMap);
-                String templateString = "{ inventoryId: '${inventoryId}', groupedBy: 'month', label: '${label}', avg: ${avg} }";
+                String templateString = "{ inventoryId: '${inventoryId}', year: ${year}, avg: ${avg} }";
                 return Document.parse(substitutor.replace(templateString));
             });
 
@@ -84,6 +82,5 @@ public class AverageAggregatorByMonth {
             argList.stream().filter(it -> !it.startsWith("fs.s3a")).forEachOrdered(arg -> session.log().error(arg));
             e.printStackTrace();
         }
-
     }
 }

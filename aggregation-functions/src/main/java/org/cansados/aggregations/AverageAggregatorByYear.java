@@ -8,6 +8,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.bson.Document;
+import org.cansados.util.Util;
 import scala.Tuple2;
 
 import java.time.LocalDate;
@@ -22,29 +23,20 @@ public class AverageAggregatorByYear {
     public static void main(String[] args) {
         List<String> argList = new ArrayList<>(Arrays.asList(args));
 
-        SparkSession spark = SparkSession
-                .builder()
-                .appName("AverageAggregator")
-                .config("spark.mongodb.output.uri", argList.remove(0) + "dsid.averages?authSource=admin")
-                .getOrCreate();
-
-        Configuration hadoopConfig = spark.sparkContext().hadoopConfiguration();
-        hadoopConfig.set("fs.s3a.access.key", argList.remove(0));
-        hadoopConfig.set("fs.s3a.secret.key", argList.remove(0));
-        hadoopConfig.set("fs.s3a.endpoint", "s3.amazonaws.com");
+        SparkSession session = Util.setupSparkSession(
+                argList,
+                "AverageAggregatorByYear",
+                "averages"
+        );
 
         String inventoryId = argList.remove(0);
 
         String columnName = argList.remove(0);
 
-        spark.log().info("Starting spark app...");
-
-        for (String arg : argList) {
-            spark.log().info("will download csv from: " + arg);
-        }
+        Util.logFilePaths(session, argList);
 
         try {
-            JavaRDD<Row> lines = spark.read().format("csv")
+            JavaRDD<Row> lines = session.read().format("csv")
                     .option("sep", ",")
                     .option("inferSchema", "true")
                     .option("header", "true")
@@ -86,9 +78,9 @@ public class AverageAggregatorByYear {
 
             MongoSpark.save(documents);
         } catch (Exception e) {
-            spark.log().error("Spark aggregation function threw an error. Listing args below: ");
+            session.log().error("Spark aggregation function threw an error. Listing args below: ");
             // Remove aws credentials
-            argList.stream().filter(it -> !it.startsWith("fs.s3a")).forEachOrdered(arg -> spark.log().error(arg));
+            argList.stream().filter(it -> !it.startsWith("fs.s3a")).forEachOrdered(arg -> session.log().error(arg));
             e.printStackTrace();
         }
 

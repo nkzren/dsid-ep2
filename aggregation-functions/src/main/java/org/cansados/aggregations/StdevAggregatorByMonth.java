@@ -2,7 +2,6 @@ package org.cansados.aggregations;
 
 import com.mongodb.spark.MongoSpark;
 import org.apache.commons.text.StringSubstitutor;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Row;
@@ -11,15 +10,13 @@ import org.bson.Document;
 import org.cansados.util.Util;
 import scala.Tuple2;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class AverageAggregatorByMonth {
+public class StdevAggregatorByMonth {
     public static void main(String[] args) {
         List<String> argList = new ArrayList<>(Arrays.asList(args));
 
@@ -84,6 +81,5 @@ public class AverageAggregatorByMonth {
             argList.stream().filter(it -> !it.startsWith("fs.s3a")).forEachOrdered(arg -> session.log().error(arg));
             e.printStackTrace();
         }
-
     }
 }
