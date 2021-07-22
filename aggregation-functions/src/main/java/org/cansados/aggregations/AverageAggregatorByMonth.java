@@ -12,11 +12,13 @@ import scala.Tuple2;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
-public class AverageAggregator {
+public class AverageAggregatorByMonth {
     public static void main(String[] args) {
         List<String> argList = new ArrayList<>(Arrays.asList(args));
 
@@ -33,6 +35,8 @@ public class AverageAggregator {
 
         String inventoryId = argList.remove(0);
 
+        String columnName = argList.remove(0);
+
         spark.log().info("Starting spark app...");
 
         for (String arg : argList) {
@@ -48,34 +52,36 @@ public class AverageAggregator {
                     .toJavaRDD();
 
             // Group by year
-            JavaPairRDD<Integer, Iterable<Row>> byYear = lines.groupBy(row -> {
-                String dateString = row.getAs("Date");
-                return LocalDate.parse(dateString, DateTimeFormatter.ofPattern("yyyy-MM-dd")).getYear();
+            JavaPairRDD<String, Iterable<Row>> byMonth = lines.groupBy(row -> {
+                String month = row.getAs("Month");
+                String year = row.getAs("Year");
+                return year + "/" + month;
             });
 
-            JavaPairRDD<Integer, Double> meanTempByYear = byYear.aggregateByKey(new Tuple2<>(0, 0.0),
+            JavaPairRDD<String, Double> meanTempByMonth = byMonth.aggregateByKey(new Tuple2<>(0, 0.0),
                     (tuple, rows) -> {
                         AtomicReference<Integer> count = new AtomicReference<>(0);
                         AtomicReference<Double> sum = new AtomicReference<>(0.0);
                         rows.iterator().forEachRemaining(row -> {
-                            Double current = row.getAs("Mean_Temp");
+                            Double current = row.getAs(columnName);
                             sum.updateAndGet(v -> v + current);
                             count.updateAndGet(v -> v + 1);
                         });
                         return new Tuple2<>(count.get(), sum.get());
                     },
                     (v1, v2) -> new Tuple2<>(v1._1 + v2._1, v1._2 + v2._2)
-            ).mapValues(sum -> { return (1.0 * sum._2 / sum._1); });
+            ).mapValues(sum -> (1.0 * sum._2 / sum._1));
 
             // Map results to
-            JavaRDD<Document> documents = meanTempByYear.map(tuple -> {
+            JavaRDD<Document> documents = meanTempByMonth.map(tuple -> {
                 Map<String, String> valuesMap = Map.of(
                         "inventoryId", inventoryId,
-                        "year", tuple._1.toString(),
+                        "groupedBy", "month",
+                        "label", tuple._1,
                         "avg", tuple._2.toString()
                 );
                 StringSubstitutor substitutor = new StringSubstitutor(valuesMap);
-                String templateString = "{ inventoryId: '${inventoryId}', year: ${year}, avg: ${avg} }";
+                String templateString = "{ inventoryId: '${inventoryId}', groupedBy: 'month', label: '${label}', avg: ${avg} }";
                 return Document.parse(substitutor.replace(templateString));
             });
 
