@@ -2,6 +2,7 @@ package org.cansados.aggregations;
 
 import com.mongodb.spark.MongoSpark;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.sql.*;
 import org.cansados.util.Util;
@@ -46,14 +47,20 @@ public class LeastSquares {
                     .agg(functions.mean(columnToPredict).as("avg"))
                     .orderBy("Year");
 
-            JavaRDD<Row> predictedValues = new VectorAssembler()
+            Dataset<Row> predictedValues = new VectorAssembler()
                     .setInputCols(new String[]{auxColumn})
                     .setOutputCol("predicted_avg")
-                    .transform(averagesByYear).toJavaRDD();
+                    .transform(averagesByYear);
 
-            MongoSpark.save(predictedValues.map(row -> {
-                session.log().info(row.getAs("predicted_avg"));
-            }));
+            session.log().info("NUMBER OF ROWS: " + predictedValues.count());
+
+            MongoSpark.save(predictedValues.map(new MapFunction<Row, LeastSquaresRow>() {
+                @Override
+                public LeastSquaresRow call(Row row) throws Exception {
+                    session.log().info("NOW FORMATTING ROW: " + row.json());
+                    return null;
+                }
+            }, Encoders.javaSerialization(LeastSquaresRow.class)));
         } catch (Exception e) {
             session.log().error("Spark aggregation function threw an error. Listing args below: ");
             // Remove aws credentials
