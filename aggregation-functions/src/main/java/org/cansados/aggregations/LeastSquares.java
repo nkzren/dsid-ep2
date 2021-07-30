@@ -54,13 +54,6 @@ public class LeastSquares {
 
             session.log().info("NUMBER OF ROWS: " + predictedValues.count());
 
-            MongoSpark.save(predictedValues.map(new MapFunction<Row, LeastSquaresRow>() {
-                @Override
-                public LeastSquaresRow call(Row row) throws Exception {
-                    session.log().info("NOW FORMATTING ROW: " + row.json());
-                    return null;
-                }
-            }, Encoders.javaSerialization(LeastSquaresRow.class)));
         } catch (Exception e) {
             session.log().error("Spark aggregation function threw an error. Listing args below: ");
             // Remove aws credentials
