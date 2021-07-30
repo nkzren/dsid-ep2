@@ -1,0 +1,31 @@
+version: '2'
+
+services:
+  front:
+    depends_on:
+      - api
+    build: ./frontend
+    ports:
+      - '3000:3000'
+  api:
+    depends_on:
+      - mongo
+    build: ./dsid-ep2-spark/
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./aggregation-functions/target/:/aggregations
+      - ./dsid-ep2-spark/src/main/resources/:/deployments/app/config
+      - ./spark-3.1.2-bin-hadoop3.2:/spark
+      - /etc/krb5.conf:/etc/krb5.conf
+  mongo:
+    image: mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - ./data:/data/db
+      - ./isd-inventory.csv:/tmp/isd-inventory.csv
+    ports:
+      - '27017:27017'
